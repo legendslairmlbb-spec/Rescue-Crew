@@ -25,6 +25,41 @@ headers on line 1 and exactly 450 listings, LST-100001 to LST-100450.
 uv run rescue-crew
 ```
 
+## Use with Claude Code
+
+Register the server once, giving the full path to this repo (`--directory` also makes `data/`
+resolve correctly):
+
+```bash
+claude mcp add rescue-crew -- uv run --directory "/path/to/Rescue-Crew" rescue-crew
+```
+
+Then run `claude mcp list` to check it is connected, and `/mcp` inside Claude Code to see the tools.
+
+## Tools
+
+Printed from the running server (`fastmcp.Client(...).list_tools()`); `?` marks an optional input.
+
+```text
+lookup_reservation(ticket_id)
+    Return a stranded guest's reservation and the current state of their case.
+search_open_listings(ticket_id, limit?)
+    Find open Lisbon homes comparable to the guest's cancelled booking.
+hold_booking(ticket_id, listing_id)
+    Hold a comparable home for the guest's whole remaining stay.
+issue_refund(ticket_id, amount_eur)
+    Refund a stranded guest, capped at the ticket's total_paid.
+message_host(ticket_id, message)
+    Send the original host one factual message about the reservation's outcome.
+handoff_to_safety_agent(ticket_id, conditions, guest_words)
+    Hand a safety ticket to a live Trust and Safety agent. Call this first.
+```
+
+## Rules in practice
+
+- Price ceiling: on an original EUR 110.00 per night, a home at EUR 132.00 (exactly 1.20×) is offered and one at EUR 132.01 is not.
+- Refund cap: LIS-TKT-0028 paid EUR 432.00 with a promo, not 4 × EUR 120.00 = EUR 480.00, so `issue_refund` allows up to EUR 432.00 and rejects EUR 432.01.
+
 ## Test & lint
 
 ```bash

@@ -193,6 +193,13 @@ def test_descriptions_carry_the_policy_rules(server):
         assert word in d["handoff_to_safety_agent"]
 
 
+def test_readme_tool_list_matches_server(server):
+    readme = (Path(__file__).parent.parent / "README.md").read_text(encoding="utf-8")
+    for name, description in tool_descriptions(server).items():
+        assert name in readme
+        assert description.strip().splitlines()[0] in readme
+
+
 # --- lookup_reservation ------------------------------------------------------------------
 
 
