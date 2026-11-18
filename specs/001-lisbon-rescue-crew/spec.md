@@ -54,6 +54,10 @@ comparable-home tests and covers `check_in_date` to `check_out_date`.
 4. **Given** a guest turns down the first home offered, **When** they ask again, **Then** they are offered another comparable home or a full refund; declining does not end their rights.
 5. **Given** a listing that was `available` at search time is `on_hold` or `booked` by the time of the hold, **When** the hold is attempted, **Then** the hold fails and the next comparable listing is tried.
 6. **Given** LIS-TKT-0017, LIS-TKT-0039, LIS-TKT-0049 or LIS-TKT-0059, whose `guest_requested` is `callback`, or LIS-TKT-0029 or LIS-TKT-0060, whose `guest_requested` is `other`, **When** triaged, **Then** they are classified `rebooking` (the guest still wants somewhere to stay), and the callback or question is flagged for a human supervisor.
+7. **Given** the open listings export as of 16 November 2026, **When** each of the 34 rebooking tickets is searched on its own, **Then** every ticket has at least one listing that passes all five comparable-home tests, so none of them falls back to a refund for lack of a comparable home. The scarcest is LIS-TKT-0013 (Parque das Nacoes, 3 bedrooms, 6 guests, 16 to 23 Nov), with 7 passing listings.
+8. **Given** the same export, **When** all 34 rebooking tickets are placed together, **Then** each gets a different passing listing, so no listing is held for two guests. This matters most for the tickets needing 3 or more bedrooms (LIS-TKT-0013, 0020, 0027, 0033, 0038, 0045, 0047, 0058), which draw on a small shared pool.
+9. **Given** LIS-TKT-0013, LIS-TKT-0033, LIS-TKT-0043 or LIS-TKT-0058, **When** searched, **Then** no passing listing is in the guest's own `neighborhood`, so the guest is offered a passing home in a neighbouring area rather than refused; neighbourhood is a preference, not a test.
+10. **Given** a ticket's search returns listings with an empty `rating`, **When** the five tests are applied, **Then** those listings are judged on the five tests alone; `rating`, `instant_book`, `title` and `host_id` are never pass/fail tests.
 
 ---
 
@@ -204,9 +208,11 @@ ticket's `host_id` and that it contains no guest contact details.
 - **SC-006**: All 60 tickets end with a bed, a refund or a live safety agent before 23:59 on 16 November 2026 (Lisbon time).
 - **SC-007**: Total uplift spend stays within EUR 9,000.
 - **SC-008**: A supervisor can trace any action back to its ticket, agent and Policy clause from the log alone.
+- **SC-009**: Against the 16 November 2026 open listings export, all 34 rebooking tickets are placed in distinct comparable homes, with zero falling back to a refund for lack of a comparable home.
 
 ## Assumptions
 
+- The open listings export has its column headers on line 1 and 450 listings (LST-100001 to LST-100450) after it. Its `status` values are a snapshot (314 `available`, 104 `on_hold`, 32 `booked`); the real status is checked again at hold time.
 - The ticket and open-listing data come from the two exports named in the Policy (`airbnb_lisbon_stranded_guest_tickets_2026-11-16.csv`, `airbnb_lisbon_open_listings_2026-11-16.csv`). The tickets' `expected_outcome` column is used for testing only and is never read by the agents.
 - The six tools are provided by Airbnb's systems; this feature defines who may call them and when, not how they work internally.
 - "Neighbouring neighborhood" uses a fixed adjacency list of Lisbon neighbourhoods to be defined in the plan.

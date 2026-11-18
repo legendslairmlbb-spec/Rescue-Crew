@@ -35,5 +35,7 @@
   the business-level permissions being specified, not an implementation choice.
 - Classification rules were checked against the 60 incident tickets: they reproduce every
   `expected_outcome` (34 rebooking, 20 refund, 6 safety).
-- Comparable-home checks cannot be validated yet: the open listings export
-  (`airbnb_lisbon_open_listings_2026-11-16.csv`) is not in the repository.
+- Comparable-home checks were run against the open listings export (450 listings). All 34
+  rebooking tickets have at least one comparable home, and all 34 can be placed in distinct
+  listings at once (User Story 2, scenarios 7 to 10; SC-009). The export itself is not in the
+  repository.
