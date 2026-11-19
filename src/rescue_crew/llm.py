@@ -1,7 +1,11 @@
-"""Minimal Gemini client using a single Google AI key.
+"""Minimal OpenRouter chat client using a single API key.
 
-The key is read from GOOGLE_AI_API_KEY (environment or the git-ignored .env file) and is
-sent only in the x-goog-api-key header, never in a URL, log line or error message.
+All settings come from the environment or the git-ignored .env file, never from code:
+
+- OPENROUTER_API_KEY: the key, sent only in the Authorization header and redacted from errors
+- OPENROUTER_MODEL: the model to call first
+- OPENROUTER_FALLBACK_MODELS: optional comma-separated models tried in order when the previous
+  one is rate-limited, unavailable or times out
 """
 
 from __future__ import annotations
@@ -13,16 +17,17 @@ import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
 
-API_BASE = "https://generativelanguage.googleapis.com/v1beta"
-# Verified 2026-11-19 on the free tier: gemini-3.5-flash-lite answers; gemini-3.5-flash allows
-# only 20 requests/day; gemini-flash-latest and gemini-3.8-flash timed out; gemini-2.5-flash is
-# closed to new users.
-DEFAULT_MODEL = "gemini-3.5-flash-lite"
-KEY_VAR = "GOOGLE_AI_API_KEY"
+API_URL = "https://openrouter.ai/api/v1/chat/completions"
+KEY_VAR = "OPENROUTER_API_KEY"
+MODEL_VAR = "OPENROUTER_MODEL"
+FALLBACK_VAR = "OPENROUTER_FALLBACK_MODELS"
+
+# Errors worth trying the next model for. 401 (bad key) is not: every model would fail.
+RETRYABLE_STATUS = {402, 403, 404, 408, 429, 500, 502, 503, 504}
 
 
-class GeminiError(RuntimeError):
-    """A Gemini call failed. The message never contains the API key."""
+class LLMError(RuntimeError):
+    """A model call failed. The message never contains the API key."""
 
     def __init__(self, message: str, status: int | None = None):
         super().__init__(message)
@@ -43,28 +48,34 @@ def load_env(path: Path | str = ".env") -> None:
 
 
 @dataclass
-class GeminiClient:
+class OpenRouterClient:
     api_key: str = field(repr=False)
-    model: str = DEFAULT_MODEL
-    timeout: float = 60.0
+    models: list[str]
+    timeout: float = 120.0
+    last_model: str | None = None  # the model that produced the most recent reply
 
     @classmethod
-    def from_env(cls, env_file: Path | str = ".env") -> GeminiClient:
+    def from_env(cls, env_file: Path | str = ".env") -> OpenRouterClient:
         load_env(env_file)
         key = os.environ.get(KEY_VAR, "").strip()
+        model = os.environ.get(MODEL_VAR, "").strip()
         if not key:
-            raise GeminiError(f"{KEY_VAR} is not set (put it in .env or the environment)")
-        return cls(api_key=key, model=os.environ.get("GEMINI_MODEL", DEFAULT_MODEL))
+            raise LLMError(f"{KEY_VAR} is not set (put it in .env or the environment)")
+        if not model:
+            raise LLMError(f"{MODEL_VAR} is not set (put the model name in .env)")
+        fallbacks = [m.strip() for m in os.environ.get(FALLBACK_VAR, "").split(",") if m.strip()]
+        return cls(api_key=key, models=[model, *[m for m in fallbacks if m != model]])
 
-    def generate(self, prompt: str, system: str | None = None) -> str:
-        """Send one prompt and return the model's text reply."""
-        body: dict = {"contents": [{"role": "user", "parts": [{"text": prompt}]}]}
-        if system:
-            body["systemInstruction"] = {"parts": [{"text": system}]}
+    def _call(self, model: str, messages: list[dict]) -> str:
+        body = json.dumps({"model": model, "messages": messages}).encode("utf-8")
         req = urllib.request.Request(
-            f"{API_BASE}/models/{self.model}:generateContent",
-            data=json.dumps(body).encode("utf-8"),
-            headers={"Content-Type": "application/json", "x-goog-api-key": self.api_key},
+            API_URL,
+            data=body,
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+                "X-Title": "Rescue Crew",
+            },
             method="POST",
         )
         try:
@@ -72,22 +83,43 @@ class GeminiClient:
                 data = json.load(resp)
         except urllib.error.HTTPError as e:
             detail = e.read().decode("utf-8", "replace")[:300].replace(self.api_key, "***")
-            raise GeminiError(f"Gemini returned HTTP {e.code}: {detail}", e.code) from None
+            raise LLMError(f"{model}: HTTP {e.code}: {detail}", e.code) from None
         except urllib.error.URLError as e:
-            raise GeminiError(f"could not reach Gemini: {e.reason}") from None
+            raise LLMError(f"{model}: could not reach OpenRouter: {e.reason}") from None
         except TimeoutError:
-            raise GeminiError(f"Gemini did not answer within {self.timeout:g}s") from None
+            raise LLMError(f"{model}: no answer within {self.timeout:g}s", 408) from None
 
+        if "error" in data:
+            err = data["error"]
+            raise LLMError(f"{model}: {err.get('message', err)}", err.get("code"))
         try:
-            parts = data["candidates"][0]["content"]["parts"]
+            text = data["choices"][0]["message"].get("content") or ""
         except (KeyError, IndexError, TypeError):
-            reason = (data.get("promptFeedback") or {}).get("blockReason", "no candidates")
-            raise GeminiError(f"Gemini returned no text ({reason})") from None
-        return "".join(p.get("text", "") for p in parts).strip()
+            raise LLMError(f"{model}: response had no choices", 502) from None
+        if not text.strip():
+            raise LLMError(f"{model}: empty reply", 502)
+        return text.strip()
+
+    def generate(self, prompt: str, system: str | None = None) -> str:
+        """Send one prompt; try each configured model in order until one answers."""
+        messages = [{"role": "system", "content": system}] if system else []
+        messages.append({"role": "user", "content": prompt})
+        errors = []
+        for model in self.models:
+            try:
+                text = self._call(model, messages)
+            except LLMError as e:
+                if e.status not in RETRYABLE_STATUS:
+                    raise
+                errors.append(str(e))
+                continue
+            self.last_model = model
+            return text
+        raise LLMError("all models failed: " + " | ".join(errors))
 
 
 def check() -> None:
-    """Command-line check: one short live call, printing the model and its reply."""
-    client = GeminiClient.from_env()
+    """Command-line check: one short live call, printing which model answered."""
+    client = OpenRouterClient.from_env()
     reply = client.generate("Reply with exactly: OK")
-    print(f"{client.model}: {reply}")
+    print(f"{client.last_model}: {reply}")
