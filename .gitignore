@@ -14,3 +14,8 @@ wheels/
 
 # Incident data exports (guest and listing data; not published)
 data/
+
+# Secrets (API keys)
+.env
+.env.*
+!.env.example
