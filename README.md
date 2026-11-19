@@ -86,3 +86,16 @@ uv run ruff check .
 ```
 
 Tests in `tests/test_incident_data.py` run only when the exports are in `data/`.
+
+## Running the 60 tickets
+
+```bash
+uv run rescue-crew-run
+```
+
+Runs are resumable. Each finished ticket gets one row in `reports/lisbon-run-state.jsonl`
+(ticket_id, outcome, tool calls in order, listing held, refund), written only after its last
+step. The next run skips those tickets and treats their homes as taken. A run stops after 3
+tickets in a row fail (for example when the free daily model limit is used up), so just run it
+again later. When all 60 rows exist it writes `reports/lisbon-results.md`;
+`uv run rescue-crew-report` builds that report from the state file at any time.

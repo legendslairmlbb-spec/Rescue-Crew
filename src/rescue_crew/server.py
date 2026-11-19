@@ -88,6 +88,28 @@ class IncidentState:
             )
 
 
+def _restore(state: IncidentState, path: Path) -> None:
+    """Replay finished tickets from an earlier run so no home or remedy is used twice."""
+    from rescue_crew.state import load_state
+
+    for tid, row in load_state(path).items():
+        if tid not in state.tickets:
+            raise ValueError(f"run state names unknown ticket {tid}")
+        lid = row.get("held_listing_id")
+        if lid:
+            if lid not in state.listings:
+                raise ValueError(f"run state: {tid} held {lid}, which is not in the export")
+            if lid in state.holds.values():
+                raise ValueError(f"run state: {lid} is held by two tickets")
+            state.live_status[lid] = "on_hold"
+            state.holds[tid] = lid
+            state.uplift_spent += policy.uplift(state.tickets[tid], state.listings[lid])
+        if row.get("refund_eur"):
+            state.refunds[tid] = Decimal(str(row["refund_eur"]))
+        if row.get("outcome") == "safety_handoff":
+            state.handoffs[tid] = list(row.get("safety_conditions") or [])
+
+
 def _money(x: Decimal) -> str:
     return str(x.quantize(policy.CENT))
 
@@ -97,12 +119,19 @@ def create_server(
     tickets_path: Path = DEFAULT_TICKETS,
     *,
     require_full_export: bool = True,
+    state_path: Path | None = None,
 ) -> FastMCP:
-    """Load both exports (once) and return the server with all six tools registered."""
+    """Load both exports (once) and return the server with all six tools registered.
+
+    If ``state_path`` names a run-state file, tickets finished in earlier runs are restored
+    first: their held listings are taken, and their refunds and hand-offs are on record.
+    """
     listings = load_listings(Path(listings_path))
     if require_full_export:
         check_full_export(listings)
     state = IncidentState(tickets=load_tickets(Path(tickets_path)), listings=listings)
+    if state_path is not None:
+        _restore(state, Path(state_path))
 
     mcp = FastMCP("rescue-crew", instructions=INSTRUCTIONS)
     mcp.state = state  # exposed for tests and supervisors
@@ -337,4 +366,5 @@ def create_server(
 def main() -> None:
     listings = Path(os.environ.get("RESCUE_CREW_LISTINGS_CSV", DEFAULT_LISTINGS))
     tickets = Path(os.environ.get("RESCUE_CREW_TICKETS_CSV", DEFAULT_TICKETS))
-    create_server(listings, tickets).run()
+    state_file = os.environ.get("RESCUE_CREW_STATE_FILE")
+    create_server(listings, tickets, state_path=Path(state_file) if state_file else None).run()

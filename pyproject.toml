@@ -8,12 +8,17 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
-    "fastmcp>=4.2.1",
+    "fastmcp<4",
+    "langchain-mcp-adapters>=0.3.2",
+    "langchain-openai>=1.8.3",
+    "mcp>=1.24,<2",
 ]
 
 [project.scripts]
 rescue-crew = "rescue_crew:main"
 rescue-crew-check-llm = "rescue_crew.llm:check"
+rescue-crew-run = "rescue_crew.run:main"
+rescue-crew-report = "rescue_crew.run:report_main"
 
 [build-system]
 requires = ["uv_build>=0.11.28,<0.12.0"]
