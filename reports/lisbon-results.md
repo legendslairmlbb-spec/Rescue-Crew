@@ -82,3 +82,9 @@ Tool calls are in the order they were called. A status in brackets means the cal
 | LIS-TKT-0058 | rebooked | rebooking | search_open_listings → hold_booking(LST-100115) → message_host | LST-100115 |  |  |
 | LIS-TKT-0059 | rebooked | rebooking | search_open_listings → hold_booking(LST-100139) → message_host | LST-100139 |  | guest_requested=callback: flagged for a human supervisor |
 | LIS-TKT-0060 | rebooked | rebooking | search_open_listings → hold_booking(LST-100209) → message_host | LST-100209 |  | guest_requested=other: flagged for a human supervisor |
+
+## Totals
+
+| Rebooked | Refunded | Safety hand-offs |
+|---|---|---|
+| 34 | 20 | 6 |

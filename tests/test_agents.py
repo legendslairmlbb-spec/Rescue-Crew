@@ -325,3 +325,9 @@ def test_report_is_built_from_state_rows_only(tmp_path):
     )
     assert "handoff_to_safety_agent(injury_or_medical_need)" in text
     assert "EUR 432.00" in text
+    # The three totals are the last thing in the report: 2 rebooked, 1 refunded, 1 safety.
+    assert text.rstrip().splitlines()[-3:] == [
+        "| Rebooked | Refunded | Safety hand-offs |",
+        "|---|---|---|",
+        "| 2 | 1 | 1 |",
+    ]

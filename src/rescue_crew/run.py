@@ -172,6 +172,17 @@ def build_report(
         )
     if missing:
         lines += ["", "## Not finished yet", "", ", ".join(missing)]
+    lines += [
+        "",
+        "## Totals",
+        "",
+        "| Rebooked | Refunded | Safety hand-offs |",
+        "|---|---|---|",
+        (
+            f"| {counts.get('rebooked', 0)} | {counts.get('refunded', 0)} | "
+            f"{counts.get('safety_handoff', 0)} |"
+        ),
+    ]
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return path
