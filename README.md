@@ -101,3 +101,26 @@ step. The next run skips those tickets and treats their homes as taken. A run st
 tickets in a row fail (for example when the free daily model limit is used up), so just run it
 again later. When all 60 rows exist it writes `reports/lisbon-results.md`;
 `uv run rescue-crew-report` builds that report from the state file at any time.
+
+## Demo support chat window
+
+```bash
+uv run rescue-crew-demo
+```
+
+Opens on http://127.0.0.1:8765 (local only). It runs one ticket at a time through the same
+team, safety gate, allowlists and prompts as the 60-ticket run, on a throwaway in-memory server:
+no run-state file is read or written, and every run checks that
+`reports/lisbon-run-state.jsonl` is unchanged. Tickets come from
+`data/demo/stranded_guest_tickets_2026-12-07.csv` (or `RESCUE_CREW_DEMO_TICKETS`); guest names
+and `expected_outcome` are never loaded.
+
+- **Run live** calls the model from `.env` and shows every tool call in order, including
+  blocked ones.
+- **Try the refund anyway** sends `issue_refund` through the same gate after the run.
+- **Play recorded run** replays the last live run of that ticket (saved in
+  `data/demo/replays/`, git-ignored), labelled as a replay, for when the endpoint is
+  rate-limited.
+
+Demo tickets are dated 7 December while the listings export is from 16 November, so
+rebooking tickets may find no comparable home and fall back to a refund.

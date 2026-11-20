@@ -200,6 +200,9 @@ class Team:
             raise RuntimeError(f"MCP server is missing tools: {sorted(missing)}")
         self.model_factory = model_factory
         self.gate = SafetyGate()
+        # Optional observer (e.g. the demo chat window). It only watches: it cannot change
+        # which tools run or what they return.
+        self.on_event: Callable[[dict[str, Any]], None] | None = None
         self._models = {
             agent: model_factory([self.tools[n] for n in sorted(names)])
             for agent, names in ALLOWLIST.items()
@@ -216,6 +219,7 @@ class Team:
     ) -> tuple[str, str | None, Any]:
         """Run one agent. Returns (final_text, terminal_tool_that_succeeded, its_result)."""
         model = self._models[agent]
+        self._emit({"type": "agent", "agent": agent})
         messages: list = [SystemMessage(system), HumanMessage(user)]
         for _ in range(max_steps):
             result.model_calls += 1
@@ -240,6 +244,16 @@ class Team:
 
         def record(status: str, content: str) -> None:
             result.tool_calls.append(ToolCallRecord(agent, name, args, status, content[:300]))
+            self._emit(
+                {
+                    "type": "tool",
+                    "agent": agent,
+                    "tool": name,
+                    "args": args,
+                    "status": status,
+                    "content": content[:300],
+                }
+            )
 
         if name not in ALLOWLIST[agent] or name not in self.tools:
             msg = f"REJECTED: {agent} agent is not allowed to call {name}"
@@ -268,6 +282,21 @@ class Team:
             except ValueError:
                 data = None
         return status, content, data
+
+    def _emit(self, event: dict[str, Any]) -> None:
+        if self.on_event is not None:
+            self.on_event(event)
+
+    async def attempt(
+        self, agent: str, tool: str, args: dict[str, Any], result: TicketResult
+    ) -> str:
+        """Send one tool call through the same allowlist and safety gate as the agents use.
+
+        Used to show what happens when someone tries an action anyway; returns the status.
+        """
+        call = {"id": f"manual-{len(result.tool_calls) + 1}"}
+        status, _, _ = await self._execute(agent, tool, dict(args), call, result)
+        return status
 
     async def run_ticket(self, ticket: dict[str, str]) -> TicketResult:
         tid = ticket["ticket_id"]

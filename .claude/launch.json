@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "rescue-crew-demo",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": ["run", "rescue-crew-demo"],
+      "port": 8765
+    }
+  ]
+}

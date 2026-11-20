@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rescue Crew Support</title>
+<style>
+:root {
+  --bg: #f6f5f2; --panel: #ffffff; --ink: #1d1d1b; --muted: #6b6a66; --line: #e3e1dc;
+  --guest: #eef1f6; --crew: #f1f6ef; --accent: #2b5fd9;
+  --ok: #1f7a3d; --ok-bg: #e5f4ea; --bad: #b42318; --bad-bg: #fde8e6;
+  --warn: #9a5b00; --warn-bg: #fdf1dc; --safety: #7a1fa8; --safety-bg: #f4e8fb;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #161615; --panel: #1f1f1d; --ink: #ecebe7; --muted: #9c9a94; --line: #34332f;
+    --guest: #252a33; --crew: #232b24; --accent: #7aa2ff;
+    --ok: #6fd18f; --ok-bg: #1d3325; --bad: #ff8a7d; --bad-bg: #3a1f1c;
+    --warn: #f0b75a; --warn-bg: #3a2c15; --safety: #d59cf5; --safety-bg: #31203b;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink);
+  font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+header { display: flex; align-items: center; gap: 12px; padding: 14px 20px;
+  border-bottom: 1px solid var(--line); background: var(--panel); flex-wrap: wrap; }
+header h1 { font-size: 17px; margin: 0; }
+header .sub { color: var(--muted); font-size: 13px; }
+#mode { margin-left: auto; font-size: 12px; font-weight: 600; padding: 3px 10px;
+  border-radius: 99px; background: var(--line); }
+#mode.live { background: var(--ok-bg); color: var(--ok); }
+#mode.replay { background: var(--warn-bg); color: var(--warn); }
+main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 16px;
+  padding: 16px; max-width: 1400px; margin: 0 auto; }
+@media (max-width: 860px) { main { grid-template-columns: 1fr; } }
+section { background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  display: flex; flex-direction: column; min-height: 70vh; }
+section h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--muted); margin: 0; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.controls { padding: 12px 16px; display: grid; gap: 8px; border-bottom: 1px solid var(--line); }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+select, textarea, button { font: inherit; color: inherit; }
+select { padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--panel); min-width: 0; flex: 1; }
+textarea { width: 100%; min-height: 96px; padding: 8px 10px; border: 1px solid var(--line);
+  border-radius: 8px; background: var(--bg); resize: vertical; }
+button { padding: 7px 14px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--panel); cursor: pointer; font-weight: 600; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.danger { border-color: var(--bad); color: var(--bad); }
+button:disabled { opacity: .45; cursor: default; }
+.tag { font-size: 12px; padding: 2px 8px; border-radius: 99px; background: var(--line); }
+#chat { padding: 16px; display: flex; flex-direction: column; gap: 10px; overflow: auto; flex: 1; }
+.bubble { max-width: 88%; padding: 10px 12px; border-radius: 12px; white-space: pre-wrap; }
+.bubble.guest { background: var(--guest); align-self: flex-start; }
+.bubble.crew { background: var(--crew); align-self: flex-end; }
+.bubble.safety { background: var(--safety-bg); color: var(--ink);
+  border: 1px solid var(--safety); }
+.bubble .who { font-size: 12px; color: var(--muted); display: block; margin-bottom: 2px; }
+#timeline { padding: 8px 16px 16px; overflow: auto; flex: 1; }
+.agent { margin-top: 14px; font-size: 12px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .05em; color: var(--muted); }
+.call { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 8px; padding: 8px 0;
+  border-bottom: 1px dashed var(--line); }
+.call .n { color: var(--muted); font-variant-numeric: tabular-nums; }
+.call code { font-family: ui-monospace, Consolas, monospace; font-size: 13px; }
+.call .detail { color: var(--muted); font-size: 12.5px; overflow-wrap: anywhere; margin-top: 2px; }
+.status { font-size: 11.5px; font-weight: 700; padding: 1px 8px; border-radius: 99px;
+  margin-left: 6px; }
+.s-success { background: var(--ok-bg); color: var(--ok); }
+.s-blocked_by_safety_gate, .s-error { background: var(--bad-bg); color: var(--bad); }
+.s-rejected_not_allowed, .s-rejected_wrong_ticket { background: var(--warn-bg); color: var(--warn); }
+.call.blocked { background: var(--bad-bg); border-radius: 8px; padding: 8px; border: 0;
+  margin: 6px 0; }
+.manual { margin-top: 16px; font-weight: 700; color: var(--bad); }
+.outcome { margin-top: 16px; padding: 12px; border-radius: 10px; background: var(--bg);
+  border: 1px solid var(--line); }
+.outcome b { font-size: 16px; }
+.check { font-size: 12.5px; color: var(--ok); margin-top: 6px; }
+.check.no { color: var(--bad); }
+.empty { color: var(--muted); padding: 16px 0; }
+.err { color: var(--bad); margin-top: 12px; }
+footer { color: var(--muted); font-size: 12px; text-align: center; padding: 0 16px 16px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Rescue Crew Support</h1>
+  <span class="sub">Lisbon stranded-guest desk · real agent team, throwaway server</span>
+  <span id="mode">idle</span>
+</header>
+<main>
+  <section>
+    <h2>Guest chat</h2>
+    <div class="controls">
+      <div class="row">
+        <select id="ticket" aria-label="Ticket"></select>
+        <span class="tag" id="requested"></span>
+        <span class="tag" id="lang"></span>
+      </div>
+      <textarea id="message" aria-label="Guest message"></textarea>
+      <div class="row">
+        <button class="primary" id="runLive">Run live</button>
+        <button id="runReplay">Play recorded run</button>
+        <button class="danger" id="refund" disabled>Try the refund anyway</button>
+      </div>
+    </div>
+    <div id="chat"><div class="empty">Pick a ticket and run it.</div></div>
+  </section>
+  <section>
+    <h2>What the team did, in order</h2>
+    <div id="timeline"><div class="empty">Tool calls appear here as they happen.</div></div>
+  </section>
+</main>
+<footer id="foot"></footer>
+<script>
+const $ = (id) => document.getElementById(id);
+let tickets = {}, replays = {}, lastMode = null, n = 0;
+
+const SUMMARY = {
+  safety_handoff: "A live Trust and Safety agent is taking over this case now. Stay where you are if it is safe; they will contact you directly.",
+  rebooked: "We have held a comparable home for your whole stay.",
+  refunded: "We have refunded what you paid.",
+  needs_human: "A support supervisor is reviewing your case.",
+};
+
+function esc(s) { const d = document.createElement("div"); d.textContent = s ?? ""; return d.innerHTML; }
+
+function detail(ev) {
+  const a = ev.args || {};
+  if (ev.tool === "handoff_to_safety_agent") return "conditions: " + (a.conditions || []).join(", ");
+  if (ev.tool === "issue_refund") return "amount: EUR " + a.amount_eur;
+  if (ev.tool === "hold_booking") return "listing: " + a.listing_id;
+  if (ev.tool === "message_host") return "message: " + a.message;
+  return "";
+}
+
+function bubble(cls, who, text) {
+  const chat = $("chat");
+  chat.querySelector(".empty")?.remove();
+  const b = document.createElement("div");
+  b.className = "bubble " + cls;
+  b.innerHTML = `<span class="who">${esc(who)}</span>${esc(text)}`;
+  chat.appendChild(b);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function add(html) {
+  const t = $("timeline");
+  t.querySelector(".empty")?.remove();
+  t.insertAdjacentHTML("beforeend", html);
+  t.scrollTop = t.scrollHeight;
+}
+
+function stateCheck(ok) {
+  return `<div class="check ${ok ? "" : "no"}">${ok
+    ? "✓ reports/lisbon-run-state.jsonl unchanged"
+    : "✗ reports/lisbon-run-state.jsonl CHANGED"}</div>`;
+}
+
+function handle(ev) {
+  switch (ev.type) {
+    case "live":
+      $("mode").className = "live"; $("mode").textContent = "LIVE · model called now"; break;
+    case "replay":
+      $("mode").className = "replay";
+      $("mode").textContent = "REPLAY · recorded " + ev.recorded_at.replace("T", " ");
+      break;
+    case "agent":
+      add(`<div class="agent">${esc(ev.agent.replace("_", " "))} agent</div>`); break;
+    case "tool": {
+      n += 1;
+      const blocked = ev.status !== "success";
+      add(`<div class="call ${ev.status === "blocked_by_safety_gate" ? "blocked" : ""}">
+        <span class="n">${n}</span>
+        <div><code>${esc(ev.tool)}</code><span class="status s-${esc(ev.status)}">${esc(ev.status.replaceAll("_", " "))}</span>
+        <div class="detail">${esc(detail(ev))}</div>
+        ${blocked ? `<div class="detail">${esc(ev.content)}</div>` : ""}</div></div>`);
+      break;
+    }
+    case "outcome": {
+      const conds = ev.safety_conditions?.length ? " · " + ev.safety_conditions.join(", ") : "";
+      add(`<div class="outcome"><b>${esc(ev.outcome)}</b>${esc(conds)}
+        <div class="detail">${ev.model_calls} model call(s)${ev.models_used?.length ? " · " + esc(ev.models_used.join(", ")) : ""}</div>
+        ${(ev.notes || []).map((x) => `<div class="detail">${esc(x)}</div>`).join("")}
+        ${stateCheck(ev.state_file_unchanged)}</div>`);
+      bubble(ev.outcome === "safety_handoff" ? "safety" : "crew", "Rescue Crew", SUMMARY[ev.outcome] || ev.outcome);
+      $("refund").disabled = false;
+      break;
+    }
+    case "manual":
+      add(`<div class="manual">⚠ ${esc(ev.text)}</div>`); break;
+    case "manual_done":
+      add(stateCheck(ev.state_file_unchanged)); break;
+    case "error":
+      add(`<div class="err">Error: ${esc(ev.message)}</div>`); break;
+  }
+}
+
+async function stream(url, body) {
+  const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let i;
+    while ((i = buf.indexOf("\n")) >= 0) { const line = buf.slice(0, i); buf = buf.slice(i + 1); if (line) handle(JSON.parse(line)); }
+  }
+}
+
+function busy(on) {
+  for (const id of ["runLive", "runReplay", "ticket"]) $(id).disabled = on;
+  if (on) $("refund").disabled = true;
+  else $("runReplay").disabled = !replays[$("ticket").value];
+}
+
+async function run(mode) {
+  const tid = $("ticket").value;
+  $("chat").innerHTML = ""; $("timeline").innerHTML = ""; n = 0; lastMode = mode;
+  const msg = mode === "replay" ? tickets[tid].guest_message : $("message").value;
+  bubble("guest", `Guest · ${tid}`, msg);
+  busy(true);
+  try { await stream("/api/run", { ticket_id: tid, mode, message: msg }); }
+  finally { busy(false); if (mode === "live") refreshReplays(); }
+}
+
+async function refund() {
+  $("refund").disabled = true; busy(true);
+  try { await stream("/api/refund", { ticket_id: $("ticket").value, mode: lastMode }); }
+  finally { busy(false); $("refund").disabled = true; if (lastMode === "live") refreshReplays(); }
+}
+
+function show() {
+  const t = tickets[$("ticket").value];
+  $("message").value = t.guest_message;
+  $("requested").textContent = "asks for: " + t.guest_requested;
+  $("lang").textContent = t.guest_language;
+  $("runReplay").disabled = !replays[t.ticket_id];
+  $("refund").disabled = true;
+}
+
+async function refreshReplays() {
+  const d = await (await fetch("/api/tickets")).json();
+  replays = d.replays;
+  $("runReplay").disabled = !replays[$("ticket").value];
+}
+
+(async () => {
+  const d = await (await fetch("/api/tickets")).json();
+  replays = d.replays;
+  for (const t of d.tickets) {
+    tickets[t.ticket_id] = t;
+    $("ticket").insertAdjacentHTML("beforeend", `<option value="${esc(t.ticket_id)}">${esc(t.ticket_id)} · asks for ${esc(t.guest_requested)}</option>`);
+  }
+  if (tickets["LIS-TKT-0075"]) $("ticket").value = "LIS-TKT-0075";
+  show();
+  $("foot").textContent = `${d.tickets.length} tickets loaded · guest names and expected outcomes are not loaded · served on 127.0.0.1 only`;
+  $("ticket").onchange = show;
+  $("runLive").onclick = () => run("live");
+  $("runReplay").onclick = () => run("replay");
+  $("refund").onclick = refund;
+})();
+</script>
+</body>
+</html>
