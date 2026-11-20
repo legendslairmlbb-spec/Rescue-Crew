@@ -124,3 +124,12 @@ and `expected_outcome` are never loaded.
 
 Demo tickets are dated 7 December while the listings export is from 16 November, so
 rebooking tickets may find no comparable home and fall back to a refund.
+
+Proof and build notes for the window live in [`docs/demo/`](docs/demo/):
+
+- [Build prompt](docs/demo/build-prompt.md): the prompt the window was built from, where each
+  requirement landed, and the LIS-TKT-0075 hand-off screenshot.
+- [7 December hidden needs](docs/demo/2026-12-07-hidden-needs.md): which tickets ask for one
+  thing but need another.
+- [7 December results](reports/demo-2026-12-07-results.md): every ticket in that queue run
+  through the same team (`uv run rescue-crew-demo-run`), scored against `expected_outcome`.

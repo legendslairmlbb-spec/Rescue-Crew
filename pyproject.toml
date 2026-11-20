@@ -22,6 +22,7 @@ rescue-crew-check-llm = "rescue_crew.llm:check"
 rescue-crew-run = "rescue_crew.run:main"
 rescue-crew-report = "rescue_crew.run:report_main"
 rescue-crew-demo = "rescue_crew.demo:main"
+rescue-crew-demo-run = "rescue_crew.demo_run:main"
 
 [build-system]
 requires = ["uv_build>=0.11.28,<0.12.0"]

@@ -116,6 +116,7 @@ footer { color: var(--muted); font-size: 12px; text-align: center; padding: 0 16
 <script>
 const $ = (id) => document.getElementById(id);
 let tickets = {}, replays = {}, lastMode = null, n = 0;
+const FAST = new URLSearchParams(location.search).get("fast") === "1";
 
 const SUMMARY = {
   safety_handoff: "A live Trust and Safety agent is taking over this case now. Stay where you are if it is safe; they will contact you directly.",
@@ -221,13 +222,13 @@ async function run(mode) {
   const msg = mode === "replay" ? tickets[tid].guest_message : $("message").value;
   bubble("guest", `Guest · ${tid}`, msg);
   busy(true);
-  try { await stream("/api/run", { ticket_id: tid, mode, message: msg }); }
+  try { await stream("/api/run", { ticket_id: tid, mode, message: msg, fast: FAST }); }
   finally { busy(false); if (mode === "live") refreshReplays(); }
 }
 
 async function refund() {
   $("refund").disabled = true; busy(true);
-  try { await stream("/api/refund", { ticket_id: $("ticket").value, mode: lastMode }); }
+  try { await stream("/api/refund", { ticket_id: $("ticket").value, mode: lastMode, fast: FAST }); }
   finally { busy(false); $("refund").disabled = true; if (lastMode === "live") refreshReplays(); }
 }
 
@@ -253,13 +254,21 @@ async function refreshReplays() {
     tickets[t.ticket_id] = t;
     $("ticket").insertAdjacentHTML("beforeend", `<option value="${esc(t.ticket_id)}">${esc(t.ticket_id)} · asks for ${esc(t.guest_requested)}</option>`);
   }
-  if (tickets["LIS-TKT-0075"]) $("ticket").value = "LIS-TKT-0075";
+  // Optional autoplay for screenshots and demos: ?ticket=LIS-TKT-0075&play=replay&refund=1
+  const q = new URLSearchParams(location.search);
+  const pick = q.get("ticket") || "LIS-TKT-0075";
+  if (tickets[pick]) $("ticket").value = pick;
   show();
   $("foot").textContent = `${d.tickets.length} tickets loaded · guest names and expected outcomes are not loaded · served on 127.0.0.1 only`;
   $("ticket").onchange = show;
   $("runLive").onclick = () => run("live");
   $("runReplay").onclick = () => run("replay");
   $("refund").onclick = refund;
+  const play = q.get("play");
+  if (play === "replay" || play === "live") {
+    await run(play);
+    if (q.get("refund") === "1" && !$("refund").disabled) await refund();
+  }
 })();
 </script>
 </body>

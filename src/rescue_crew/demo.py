@@ -233,6 +233,11 @@ def _stream(work: Callable[[Emit], Any]) -> StreamingResponse:
     return StreamingResponse(body(), media_type="application/x-ndjson")
 
 
+def _replay_delay(body: dict[str, Any]) -> float:
+    """Pause between replayed events; ``fast`` plays instantly (for screenshots)."""
+    return 0.0 if body.get("fast") else REPLAY_DELAY_S
+
+
 def create_app(session: DemoSession) -> Starlette:
     async def page(_: Request) -> HTMLResponse:
         return HTMLResponse(PAGE.read_text(encoding="utf-8"))
@@ -256,7 +261,7 @@ def create_app(session: DemoSession) -> Starlette:
                     rec = session.load_replay(tid)
                     emit({"type": "replay", "recorded_at": rec["recorded_at"]})
                     for event in rec["events"]:
-                        await asyncio.sleep(REPLAY_DELAY_S)
+                        await asyncio.sleep(_replay_delay(body))
                         emit(event)
                     return
                 emit({"type": "live"})
@@ -274,7 +279,7 @@ def create_app(session: DemoSession) -> Starlette:
                     if not rec.get("refund_attempt"):
                         raise RuntimeError("this recording has no refund attempt")
                     for event in rec["refund_attempt"]:
-                        await asyncio.sleep(REPLAY_DELAY_S)
+                        await asyncio.sleep(_replay_delay(body))
                         emit(event)
                     return
                 await session.try_refund(emit)

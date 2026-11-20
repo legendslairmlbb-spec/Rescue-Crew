@@ -135,3 +135,24 @@ def test_web_app_live_refund_and_replay(session, monkeypatch):
         )
         assert missing[-1]["type"] == "error"
     assert session.state_untouched()
+
+
+def test_queue_run_scores_the_choice_and_the_outcome_separately():
+    from rescue_crew.demo_run import build_table, load_queue, run_queue
+
+    results = asyncio.run(
+        run_queue(
+            FIXTURES / "tickets.csv",
+            FIXTURES / "listings.csv",
+            lambda _tools: ScriptedModel(),
+            require_full_export=False,
+        )
+    )
+    tickets, expected = load_queue(FIXTURES / "tickets.csv")
+    assert all("guest_name" not in t and "expected_outcome" not in t for t in tickets)
+    text = build_table(results, tickets, expected, True, "fixtures")
+    assert "**4/4**" in text
+    assert "| LIS-TKT-0003 | refund | safety ⚑ | safety ✓ | safety_handoff ✓ |" in text
+    assert "successful refund or hold on a safety ticket: 0" in text
+    assert text.rstrip().endswith("| 2 | 1 | 1 | 0 |")
+    assert "Test Guest" not in text
