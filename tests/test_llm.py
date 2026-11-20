@@ -110,33 +110,79 @@ def test_empty_reply_is_retried_on_next_model(monkeypatch):
     assert client("model/a", "model/b").generate("hi") == "OK"
 
 
-def test_from_env_reads_key_model_and_fallbacks(monkeypatch, tmp_path):
-    for var in (llm.KEY_VAR, llm.MODEL_VAR, llm.FALLBACK_VAR):
+ALL_VARS = (
+    llm.BASE_URL_VAR,
+    llm.KEY_VAR,
+    llm.MODEL_VAR,
+    llm.FALLBACK_VAR,
+    *llm.LEGACY_VARS.values(),
+)
+
+
+@pytest.fixture
+def clean_env(monkeypatch, tmp_path):
+    for var in ALL_VARS:
         monkeypatch.delenv(var, raising=False)
-    env = tmp_path / ".env"
-    env.write_text(
-        f"OPENROUTER_API_KEY={FAKE_KEY}\nOPENROUTER_MODEL=model/a\n"
-        "OPENROUTER_FALLBACK_MODELS=model/b, model/a ,model/c\n",
-        encoding="utf-8",
+    return tmp_path / ".env"
+
+
+def write_env(path, *lines):
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def test_from_env_reads_base_url_key_model_and_fallbacks(clean_env):
+    write_env(
+        clean_env,
+        "LLM_BASE_URL=https://router.example/v1/",
+        f"LLM_API_KEY={FAKE_KEY}",
+        "LLM_MODEL=model/a",
+        "LLM_FALLBACK_MODELS=model/b, model/a ,model/c",
     )
-    c = OpenRouterClient.from_env(env)
+    c = OpenRouterClient.from_env(clean_env)
     assert c.api_key == FAKE_KEY and c.models == ["model/a", "model/b", "model/c"]
+    assert c.base_url == "https://router.example/v1"
+
+
+def test_base_url_defaults_to_openrouter_and_old_names_still_work(clean_env):
+    write_env(clean_env, f"OPENROUTER_API_KEY={FAKE_KEY}", "OPENROUTER_MODEL=model/a")
+    s = llm.settings(clean_env)
+    assert s.base_url == "https://openrouter.ai/api/v1" and s.models == ["model/a"]
+
+
+def test_new_names_win_over_old_ones(clean_env):
+    write_env(
+        clean_env,
+        "LLM_API_KEY=new",
+        "LLM_MODEL=new/model",
+        "OPENROUTER_API_KEY=old",
+        "OPENROUTER_MODEL=old/m",
+    )
+    s = llm.settings(clean_env)
+    assert s.api_key == "new" and s.models == ["new/model"]
+
+
+def test_requests_go_to_the_configured_base_url_without_streaming(monkeypatch):
+    seen = {}
+
+    def fake_urlopen(req, timeout):
+        seen["url"], seen["body"] = req.full_url, json.loads(req.data)
+        return reply("OK")
+
+    monkeypatch.setattr(llm.urllib.request, "urlopen", fake_urlopen)
+    c = OpenRouterClient(api_key=FAKE_KEY, models=["m"], base_url="https://router.example/v1")
+    c.generate("hi")
+    assert seen["url"] == "https://router.example/v1/chat/completions"
+    assert seen["body"]["stream"] is False
 
 
 @pytest.mark.parametrize(
-    ("content", "missing"),
-    [
-        ("OPENROUTER_MODEL=model/a\n", "OPENROUTER_API_KEY"),
-        ("OPENROUTER_API_KEY=k\n", "OPENROUTER_MODEL"),
-    ],
+    ("line", "missing"),
+    [("LLM_MODEL=model/a", "LLM_API_KEY"), ("LLM_API_KEY=k", "LLM_MODEL")],
 )
-def test_from_env_requires_key_and_model(monkeypatch, tmp_path, content, missing):
-    for var in (llm.KEY_VAR, llm.MODEL_VAR, llm.FALLBACK_VAR):
-        monkeypatch.delenv(var, raising=False)
-    env = tmp_path / ".env"
-    env.write_text(content, encoding="utf-8")
+def test_from_env_requires_key_and_model(clean_env, line, missing):
+    write_env(clean_env, line)
     with pytest.raises(LLMError, match=f"{missing} is not set"):
-        OpenRouterClient.from_env(env)
+        OpenRouterClient.from_env(clean_env)
 
 
 def test_no_model_name_hardcoded_in_source():

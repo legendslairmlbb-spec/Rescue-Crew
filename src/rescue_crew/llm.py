@@ -1,11 +1,15 @@
-"""Minimal OpenRouter chat client using a single API key.
+"""Minimal chat client for any OpenAI-compatible endpoint (OpenRouter by default).
 
 All settings come from the environment or the git-ignored .env file, never from code:
 
-- OPENROUTER_API_KEY: the key, sent only in the Authorization header and redacted from errors
-- OPENROUTER_MODEL: the model to call first
-- OPENROUTER_FALLBACK_MODELS: optional comma-separated models tried in order when the previous
-  one is rate-limited, unavailable or times out
+- LLM_BASE_URL: the endpoint, e.g. https://openrouter.ai/api/v1 (the default)
+- LLM_API_KEY: the key, sent only in the Authorization header and redacted from errors
+- LLM_MODEL: the model to call first
+- LLM_FALLBACK_MODELS: optional comma-separated models tried in order when the previous one
+  is rate-limited, unavailable or times out
+
+The older OPENROUTER_API_KEY / OPENROUTER_MODEL / OPENROUTER_FALLBACK_MODELS names still work
+when the LLM_* ones are not set.
 """
 
 from __future__ import annotations
@@ -17,10 +21,44 @@ import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
 
-API_URL = "https://openrouter.ai/api/v1/chat/completions"
-KEY_VAR = "OPENROUTER_API_KEY"
-MODEL_VAR = "OPENROUTER_MODEL"
-FALLBACK_VAR = "OPENROUTER_FALLBACK_MODELS"
+DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
+BASE_URL_VAR = "LLM_BASE_URL"
+KEY_VAR = "LLM_API_KEY"
+MODEL_VAR = "LLM_MODEL"
+FALLBACK_VAR = "LLM_FALLBACK_MODELS"
+LEGACY_VARS = {
+    KEY_VAR: "OPENROUTER_API_KEY",
+    MODEL_VAR: "OPENROUTER_MODEL",
+    FALLBACK_VAR: "OPENROUTER_FALLBACK_MODELS",
+}
+
+
+def _env(name: str) -> str:
+    value = os.environ.get(name, "").strip()
+    if not value and name in LEGACY_VARS:
+        value = os.environ.get(LEGACY_VARS[name], "").strip()
+    return value
+
+
+@dataclass(frozen=True)
+class LLMSettings:
+    base_url: str
+    api_key: str = field(repr=False)
+    models: list[str] = field(default_factory=list)
+
+
+def settings(env_file: Path | str = ".env") -> LLMSettings:
+    """Read endpoint, key and models from the environment / .env, or raise LLMError."""
+    load_env(env_file)
+    key, model = _env(KEY_VAR), _env(MODEL_VAR)
+    if not key:
+        raise LLMError(f"{KEY_VAR} is not set (put it in .env or the environment)")
+    if not model:
+        raise LLMError(f"{MODEL_VAR} is not set (put the model name in .env)")
+    fallbacks = [m.strip() for m in _env(FALLBACK_VAR).split(",") if m.strip()]
+    base = (_env(BASE_URL_VAR) or DEFAULT_BASE_URL).rstrip("/")
+    return LLMSettings(base, key, [model, *[m for m in fallbacks if m != model]])
+
 
 # Errors worth trying the next model for. 401 (bad key) is not: every model would fail.
 RETRYABLE_STATUS = {402, 403, 404, 408, 429, 500, 502, 503, 504}
@@ -52,24 +90,19 @@ class OpenRouterClient:
     api_key: str = field(repr=False)
     models: list[str]
     timeout: float = 120.0
+    base_url: str = DEFAULT_BASE_URL
     last_model: str | None = None  # the model that produced the most recent reply
 
     @classmethod
     def from_env(cls, env_file: Path | str = ".env") -> OpenRouterClient:
-        load_env(env_file)
-        key = os.environ.get(KEY_VAR, "").strip()
-        model = os.environ.get(MODEL_VAR, "").strip()
-        if not key:
-            raise LLMError(f"{KEY_VAR} is not set (put it in .env or the environment)")
-        if not model:
-            raise LLMError(f"{MODEL_VAR} is not set (put the model name in .env)")
-        fallbacks = [m.strip() for m in os.environ.get(FALLBACK_VAR, "").split(",") if m.strip()]
-        return cls(api_key=key, models=[model, *[m for m in fallbacks if m != model]])
+        s = settings(env_file)
+        return cls(api_key=s.api_key, models=list(s.models), base_url=s.base_url)
 
     def _call(self, model: str, messages: list[dict]) -> str:
-        body = json.dumps({"model": model, "messages": messages}).encode("utf-8")
+        # stream=False explicitly: some OpenAI-compatible routers stream when it is omitted.
+        body = json.dumps({"model": model, "messages": messages, "stream": False}).encode()
         req = urllib.request.Request(
-            API_URL,
+            f"{self.base_url}/chat/completions",
             data=body,
             headers={
                 "Authorization": f"Bearer {self.api_key}",

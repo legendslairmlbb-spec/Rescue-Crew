@@ -19,22 +19,24 @@ Other paths can be set with `RESCUE_CREW_LISTINGS_CSV` and `RESCUE_CREW_TICKETS_
 loads both files once at start and refuses to start if the listings file does not have its
 headers on line 1 and exactly 450 listings, LST-100001 to LST-100450.
 
-## OpenRouter key and model
+## LLM endpoint, key and model
 
 Copy `.env.example` to `.env` (ignored by git) and set:
 
-- `OPENROUTER_API_KEY`: your OpenRouter key
-- `OPENROUTER_MODEL`: the model to call first
-- `OPENROUTER_FALLBACK_MODELS`: optional, comma-separated, tried in order when the previous model
+- `LLM_BASE_URL`: any OpenAI-compatible endpoint (default `https://openrouter.ai/api/v1`)
+- `LLM_API_KEY`: the key for that endpoint
+- `LLM_MODEL`: the model to call first
+- `LLM_FALLBACK_MODELS`: optional, comma-separated, tried in order when the previous model
   is rate-limited, unavailable or times out
 
-No model name is written in the code. Check the key and models work:
+The older `OPENROUTER_API_KEY` / `OPENROUTER_MODEL` / `OPENROUTER_FALLBACK_MODELS` names still
+work. No endpoint, key or model name is written in the code. Check they work:
 
 ```bash
 uv run rescue-crew-check-llm
 ```
 
-It prints the model that answered followed by `OK`. Tests never call OpenRouter unless
+It prints the model that answered followed by `OK`. Tests never call a model unless
 `RESCUE_CREW_LIVE_LLM=1` is set.
 
 ## Run (stdio)

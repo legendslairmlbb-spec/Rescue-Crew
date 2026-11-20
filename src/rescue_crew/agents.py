@@ -19,7 +19,6 @@ Two rules are enforced here in code, not only in prompts:
 from __future__ import annotations
 
 import json
-import os
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -28,9 +27,7 @@ from typing import Any
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.tools import BaseTool
 
-from rescue_crew.llm import FALLBACK_VAR, KEY_VAR, MODEL_VAR, load_env
-
-OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+from rescue_crew.llm import settings
 
 ALLOWLIST: dict[str, set[str]] = {
     # Spec FR-007 lets triage use lookup_reservation too; triage reads the ticket it is given
@@ -160,25 +157,23 @@ class SafetyGate:
 
 
 def make_model_factory(env_file: str = ".env") -> Callable[[list[BaseTool]], Any]:
-    """Build OpenRouter chat models from .env (key and model names never live in code)."""
+    """Build chat models from .env: endpoint, key and model names never live in code."""
     from langchain_openai import ChatOpenAI
 
-    load_env(env_file)
-    key = os.environ.get(KEY_VAR, "").strip()
-    primary = os.environ.get(MODEL_VAR, "").strip()
-    if not key or not primary:
-        raise RuntimeError(f"{KEY_VAR} and {MODEL_VAR} must be set in .env")
-    fallbacks = [m.strip() for m in os.environ.get(FALLBACK_VAR, "").split(",") if m.strip()]
+    cfg = settings(env_file)
+    primary, fallbacks = cfg.models[0], cfg.models[1:]
 
     def chat(model: str) -> ChatOpenAI:
         return ChatOpenAI(
             model=model,
-            api_key=key,
-            base_url=OPENROUTER_BASE_URL,
+            api_key=cfg.api_key,
+            base_url=cfg.base_url,
             temperature=0,
             timeout=120,
             max_retries=4,  # backs off on 429s, honouring Retry-After
             default_headers={"X-Title": "Rescue Crew"},
+            # Some OpenAI-compatible routers stream unless told not to.
+            extra_body={"stream": False},
         )
 
     def factory(tools: list[BaseTool]) -> Any:
